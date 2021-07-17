@@ -1,0 +1,116 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Metadata:
+  'AWS::CloudFormation::Interface':
+    ParameterGroups:
+    - Label:
+        default: 'Elasticsearch Parameters'
+      Parameters:
+      - DomainName
+      - ElasticsearchVersion
+      - EBSEnabled
+      - EBSVolumeSize
+      - ClusterInstanceCount
+      - ClusterInstanceType
+      - DedicatedMasterCount
+      - DedicatedMasterType
+
+
+Parameters:
+  ParentVPCStack:
+    Description: 'Stack name of parent VPC stack.'
+    Type: String
+
+  KmsKey:
+    Description: ID of KMS key to use to encrypt the disk on the cluster (default key is used if not specified)
+    Type: String
+
+  DomainName:
+    Description: 'A name for the Amazon ES domain.'
+    Type: String
+  EBSEnabled:
+    Description: 'Specifies whether Amazon EBS volumes are attached to data nodes in the Amazon ES domain (some instance types come with instance store that you can use instead).'
+    Type: String
+    AllowedValues: [true, false]
+    Default: true
+  EBSVolumeSize:
+    Description: 'The size of the EBS volume for each data node. The minimum and maximum size of an EBS volume depends on the EBS volume type and the instance type to which it is attached.'
+    Type: Number
+    Default: 10
+  ElasticsearchVersion:
+    Description: 'Elasticsearch version'
+    Type: String
+    Default: '6.8'
+    AllowedValues: ['7.1', '6.8', '6.7', '6.5', '6.4', '6.3', '6.2', '6.0', '5.6', '5.5']
+  ClusterInstanceCount:
+    Description: 'The number of data nodes (instances) to use in the Amazon ES domain.'
+    Type: Number
+    Default: 1
+  ClusterInstanceType:
+    Description: 'The instance type for your data nodes.'
+    Type: 'String'
+    Default: 'r5.large.elasticsearch'
+  DedicatedMasterCount:
+    Description: 'The number of dedicated master nodes (instances) to use in the Amazon ES domain (set to 0 to disable dedicated master nodes).'
+    Type: Number
+    Default: 0
+  DedicatedMasterType:
+    Description: 'The instance type for your dedicated master nodes.'
+    Type: 'String'
+    Default: 'r5.large.elasticsearch'
+
+
+Conditions:
+  HasKmsKey: !Not [!Equals [!Ref KmsKey, '']]
+  HasSingleClusterInstance: !Equals [!Ref ClusterInstanceCount, '1']
+  HasDedicatedMasterNodes: !Not [!Equals [!Ref DedicatedMasterCount, 0]]
+
+Resources:
+  SecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: !Ref 'AWS::StackName'
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        SourceSecurityGroupId: sg-***********
+      VpcId: vpc-***********
+
+  ElasticsearchDomain:
+    Type: 'AWS::Elasticsearch::Domain'
+    Properties:
+      AccessPolicies:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            AWS: '*'
+          Action:
+          - 'es:ESHttp*'
+          Resource: !Sub 'arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${DomainName}/*'
+      DomainName: !Ref 'DomainName'
+      EBSOptions:
+        EBSEnabled: !Ref EBSEnabled
+        VolumeSize: !Ref EBSVolumeSize
+        VolumeType: gp2
+      ElasticsearchClusterConfig:
+        DedicatedMasterCount: !If [HasDedicatedMasterNodes, !Ref DedicatedMasterCount, !Ref 'AWS::NoValue']
+        DedicatedMasterEnabled: !If [HasDedicatedMasterNodes, true, false]
+        DedicatedMasterType: !If [HasDedicatedMasterNodes, !Ref DedicatedMasterType, !Ref 'AWS::NoValue']
+        InstanceCount: !Ref ClusterInstanceCount
+        InstanceType: !Ref ClusterInstanceType
+        ZoneAwarenessEnabled: !If [HasSingleClusterInstance, false, true]
+      ElasticsearchVersion: !Ref ElasticsearchVersion
+      EncryptionAtRestOptions:
+        Enabled: true
+      SnapshotOptions:
+        AutomatedSnapshotStartHour: 00
+      VPCOptions:
+        SecurityGroupIds:
+        - !Ref SecurityGroup
+        SubnetIds: !If
+        - HasSingleClusterInstance
+        - - subnet-**********
+        - - {'Fn::ImportValue': !Sub '${ParentVPCStack}-privateaz1subnet'}
+          - {'Fn::ImportValue': !Sub '${ParentVPCStack}-privateaz2subnet'}
+          - {'Fn::ImportValue': !Sub '${ParentVPCStack}-privateaz3subnet'}

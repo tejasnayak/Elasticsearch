@@ -1,0 +1,292 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Elasticsearch Alerting Template
+Parameters:
+  SNSTopic:
+    Description: SNS Topic name to which notifications are sent
+    Type: String
+    Default: elasticsearch-cluster-notification
+  EmailID:
+    Description: Email address for which sns should be subscribed
+    Type: String
+    Default: tejas.nayak@goevive.com
+  DataNodesCount:
+    Description: Number of data nodes in the ES cluster for which the alarm is to be set
+    Type: String
+    Default: 1
+  ElasticsearchDomain: prod-es-domain-name
+    Description: Domain name of ES to put alerts on
+    Type: String
+
+Conditions:
+  NotSingleClusterInstance: !Not [!Equals [!Ref DataNodesCount, '1']]
+
+
+Resources:
+  SnsTopic:
+    Type: 'AWS::SNS::Topic'
+    Properties:
+      Subscription:
+        - Endpoint: !Ref EmailID
+          Protocol: email
+      TopicName: !Ref SNSTopic
+  ClusterStatusYellowAlarm:
+    Condition: NotSingleClusterInstance
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmActions:
+      - !Ref SnsTopic
+      AlarmDescription: 'Replica shards for at least one index are not allocated to nodes in a cluster.'
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+      - Name: ClientId
+        Value: !Ref 'AWS::AccountId'
+      - Name: DomainName
+        Value: !Ref ElasticsearchDomain
+      EvaluationPeriods: 1
+      MetricName: 'ClusterStatus.yellow'
+      Namespace: 'AWS/ES'
+      OKActions:
+      - !Ref SnsTopic
+      Period: 60
+      Statistic: Maximum
+      Threshold: 0
+  ClusterStatusRedAlarm:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmActions:
+      - !Ref SnsTopic
+      AlarmDescription: 'Primary and replica shards of at least one index are not allocated to nodes in a cluster.'
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+      - Name: ClientId
+        Value: !Ref 'AWS::AccountId'
+      - Name: DomainName
+        Value: !Ref ElasticsearchDomain
+      EvaluationPeriods: 1
+      MetricName: 'ClusterStatus.red'
+      Namespace: 'AWS/ES'
+      OKActions:
+      - !Ref SnsTopic
+      Period: 60
+      Statistic: Maximum
+      Threshold: 0
+  ClusterCPUUtilizationTooHighAlarm:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmActions:
+      - !Ref SnsTopic
+      AlarmDescription: 'Average CPU utilization over last 10 minutes too high.'
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+      - Name: ClientId
+        Value: !Ref 'AWS::AccountId'
+      - Name: DomainName
+        Value: !Ref ElasticsearchDomain
+      EvaluationPeriods: 1
+      MetricName: 'CPUUtilization'
+      Namespace: 'AWS/ES'
+      OKActions:
+      - !Ref SnsTopic
+      Period: 600
+      Statistic: Average
+      Threshold: 80
+  ClusterMasterCPUUtilizationTooHighAlarm:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmActions:
+      - !Ref SnsTopic
+      AlarmDescription: 'Average CPU utilization over last 10 minutes too high.'
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+      - Name: ClientId
+        Value: !Ref 'AWS::AccountId'
+      - Name: DomainName
+        Value: !Ref ElasticsearchDomain
+      EvaluationPeriods: 1
+      MetricName: 'MasterCPUUtilization'
+      Namespace: 'AWS/ES'
+      OKActions:
+      - !Ref SnsTopic
+      Period: 600
+      Statistic: Average
+      Threshold: 50
+  ClusterFreeStorageSpaceTooLowAlarm:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmActions:
+      - !Ref SnsTopic
+      AlarmDescription: 'Cluster is running out of storage space.'
+      ComparisonOperator: LessThanThreshold
+      Dimensions:
+      - Name: ClientId
+        Value: !Ref 'AWS::AccountId'
+      - Name: DomainName
+        Value: !Ref ElasticsearchDomain
+      EvaluationPeriods: 1
+      MetricName: 'FreeStorageSpace'
+      Namespace: 'AWS/ES'
+      OKActions:
+      - !Ref SnsTopic
+      Period: 60
+      Statistic: Minimum
+      Threshold: 2000 # 2 Gigabyte in Megabyte
+  ClusterIndexWritesBlockedTooHighAlarm:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmActions:
+      - !Ref SnsTopic
+      AlarmDescription: 'Cluster is blocking incoming write requests.'
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+      - Name: ClientId
+        Value: !Ref 'AWS::AccountId'
+      - Name: DomainName
+        Value: !Ref ElasticsearchDomain
+      EvaluationPeriods: 1
+      MetricName: 'ClusterIndexWritesBlocked'
+      Namespace: 'AWS/ES'
+      OKActions:
+      - !Ref SnsTopic
+      Period: 60
+      Statistic: Maximum
+      Threshold: 0
+  ClusterJVMMemoryPressureTooHighAlarm:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmActions:
+      - !Ref SnsTopic
+      AlarmDescription: 'Average JVM memory pressure over last 10 minutes too high.'
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+      - Name: ClientId
+        Value: !Ref 'AWS::AccountId'
+      - Name: DomainName
+        Value: !Ref ElasticsearchDomain
+      EvaluationPeriods: 1
+      MetricName: 'JVMMemoryPressure'
+      Namespace: 'AWS/ES'
+      OKActions:
+      - !Ref SnsTopic
+      Period: 600
+      Statistic: Average
+      Threshold: 80
+  ClusterMasterJVMMemoryPressureTooHighAlarm:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmActions:
+      - !Ref SnsTopic
+      AlarmDescription: 'Average JVM memory pressure over last 10 minutes too high.'
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+      - Name: ClientId
+        Value: !Ref 'AWS::AccountId'
+      - Name: DomainName
+        Value: !Ref ElasticsearchDomain
+      EvaluationPeriods: 1
+      MetricName: 'MasterJVMMemoryPressure'
+      Namespace: 'AWS/ES'
+      OKActions:
+      - !Ref SnsTopic
+      Period: 600
+      Statistic: Average
+      Threshold: 80
+  ClusterMasterNotReachableFromNodeAlarm:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmActions:
+      - !Ref SnsTopic
+      AlarmDescription: 'Master node stopped or not reachable. Usually the result of a network connectivity issue or AWS dependency problem.'
+      ComparisonOperator: LessThanThreshold
+      Dimensions:
+      - Name: ClientId
+        Value: !Ref 'AWS::AccountId'
+      - Name: DomainName
+        Value: !Ref ElasticsearchDomain
+      EvaluationPeriods: 1
+      MetricName: 'MasterReachableFromNode'
+      Namespace: 'AWS/ES'
+      OKActions:
+      - !Ref SnsTopic
+      Period: 60
+      Statistic: Minimum
+      Threshold: 1
+  ClusterAutomatedSnapshotFailureTooHighAlarm:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmActions:
+      - !Ref SnsTopic
+      AlarmDescription: 'No automated snapshot was taken for the domain in the previous 36 hours.'
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+      - Name: ClientId
+        Value: !Ref 'AWS::AccountId'
+      - Name: DomainName
+        Value: !Ref ElasticsearchDomain
+      EvaluationPeriods: 1
+      MetricName: 'AutomatedSnapshotFailure'
+      Namespace: 'AWS/ES'
+      OKActions:
+      - !Ref SnsTopic
+      Period: 60
+      Statistic: Maximum
+      Threshold: 0
+  ClusterKibanaHealthyNodesTooLowAlarm:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmActions:
+      - !Ref SnsTopic
+      AlarmDescription: 'Kibana is inaccessible.'
+      ComparisonOperator: LessThanThreshold
+      Dimensions:
+      - Name: ClientId
+        Value: !Ref 'AWS::AccountId'
+      - Name: DomainName
+        Value: !Ref ElasticsearchDomain
+      EvaluationPeriods: 1
+      MetricName: 'KibanaHealthyNodes'
+      Namespace: 'AWS/ES'
+      OKActions:
+      - !Ref SnsTopic
+      Period: 60
+      Statistic: Minimum
+      Threshold: 1
+  ClusterKMSKeyErrorAlarm:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmActions:
+      - !Ref SnsTopic
+      AlarmDescription: 'KMS customer master key used to encrypt data at rest has been disabled.'
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+      - Name: ClientId
+        Value: !Ref 'AWS::AccountId'
+      - Name: DomainName
+        Value: !Ref ElasticsearchDomain
+      EvaluationPeriods: 1
+      MetricName: 'KMSKeyError'
+      Namespace: 'AWS/ES'
+      OKActions:
+      - !Ref SnsTopic
+      Period: 60
+      Statistic: Maximum
+      Threshold: 0
+  ClusterKMSKeyInaccessibleAlarm:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmActions:
+      - !Ref SnsTopic
+      AlarmDescription: 'KMS customer master key used to encrypt data at rest has been deleted or revoked its grants to Amazon ES.'
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+      - Name: ClientId
+        Value: !Ref 'AWS::AccountId'
+      - Name: DomainName
+        Value: !Ref ElasticsearchDomain
+      EvaluationPeriods: 1
+      MetricName: 'KMSKeyInaccessible'
+      Namespace: 'AWS/ES'
+      OKActions:
+      - !Ref SnsTopic
+      Period: 60
+      Statistic: Maximum
+      Threshold: 0
